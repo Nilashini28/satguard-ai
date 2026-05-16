@@ -2,23 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Activity, Eye } from 'lucide-react';
+import { Activity, Eye, Globe, AlertCircle } from 'lucide-react';
 
-import { useTelemetry } from '@/hooks/useTelemetry';
-import { useAnomalyDetection } from '@/hooks/useAnomalyDetection';
-import { useForecast } from '@/hooks/useForecast';
+import { useSatellites } from '@/hooks/useSatellites';
+import { useLiveTelemetry } from '@/hooks/useLiveTelemetry';
+import { useAnomalies } from '@/hooks/useAnomalies';
 
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import Hero from '@/components/layout/Hero';
-import SatelliteSelector from '@/components/telemetry/SatelliteSelector';
 import TelemetryGrid from '@/components/telemetry/TelemetryGrid';
 import TelemetryChart from '@/components/visualization/TelemetryChart';
-import AnomalyAlerts from '@/components/ai/AnomalyAlerts';
-import SatelliteAssistant from '@/components/ai/SatelliteAssistant';
-import CommandPanel from '@/components/commands/CommandPanel';
+import AnomalyAlertFeed from '@/components/AnomalyAlertFeed';
+import ChatBot from '@/components/ChatBot';
+import ModelExplainability from '@/components/ModelExplainability';
 
-import type { SatelliteState, AnomalyAlert } from '@/types/satellite';
+import type { SatelliteTelemetry } from '@/hooks/useSatellites';
+import type { LiveTelemetry } from '@/hooks/useLiveTelemetry';
+import type { SatelliteState } from '@/types/satellite';
+
+function toSatelliteState(sat: any): SatelliteState {
+  return {
+    noradId: sat.noradId?.toString() || '0',
+    name: sat.name || 'Unknown',
+    altitude: sat.altitude ?? 0,
+    velocity: sat.velocity ?? 0,
+    temperature: sat.temperature ?? 0,
+    battery: sat.battery ?? 0,
+    signalStrength: sat.signalStrength ?? null,
+    lat: sat.latitude ?? 0,
+    lng: sat.longitude ?? 0,
+    eclipseStatus: sat.inEclipse ? 'eclipse' : 'sunlit',
+    status: 'nominal',
+    history: []
+  };
+}
+
+function toSatelliteStateArray(sats: any[]): SatelliteState[] {
+  return sats.map(toSatelliteState);
+}
 
 const EarthGlobe = dynamic(
   () => import('@/components/visualization/EarthGlobe').then(m => m.default),
@@ -30,47 +52,47 @@ const EarthGlobe = dynamic(
 );
 
 export default function Dashboard() {
-  const { satellites, loading, error, lastUpdated } = useTelemetry();
-  const { alerts, acknowledgeAlert, alertCount } = useAnomalyDetection(satellites);
-  const [selectedSatellite, setSelectedSatellite] = useState<SatelliteState | null>(null);
-  const [selectedMetric, setSelectedMetric] = useState<'temperature' | 'battery' | 'signalStrength'>('temperature');
-  const [investigateMessage, setInvestigateMessage] = useState<string>('');
+  const { satellites: polledSatellites, spaceWeather, lastFetched, isLoading: pollingLoading } = useSatellites(15000);
+  const { satellites: liveSatellites, connected, lastUpdate } = useLiveTelemetry();
+  const { alerts } = useAnomalies(liveSatellites);
 
-  const { temperatureForecast, batteryForecast, signalForecast, hasPredictedAnomaly, timeToAnomaly } = useForecast(selectedSatellite);
+  const satellites = liveSatellites.length > 0 ? liveSatellites : polledSatellites.map(s => ({
+    noradId: s.noradId,
+    name: s.name,
+    latitude: s.latitude,
+    longitude: s.longitude,
+    altitude: s.altitude,
+    velocity: s.velocity,
+    temperature: s.temperature,
+    battery: s.battery,
+    signalStrength: s.signalStrength,
+    inEclipse: s.inEclipse,
+    timestamp: s.timestamp
+  }));
+
+  const [selectedSatellite, setSelectedSatellite] = useState<SatelliteTelemetry | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<'temperature' | 'battery' | 'signalStrength'>('temperature');
 
   useEffect(() => {
     if (satellites.length > 0 && !selectedSatellite) {
-      setSelectedSatellite(satellites[0]);
+      setSelectedSatellite(satellites[0] as SatelliteTelemetry);
     }
   }, [satellites, selectedSatellite]);
 
   useEffect(() => {
     if (satellites.length > 0 && selectedSatellite) {
-      const updated = satellites.find(s => s.noradId === selectedSatellite.noradId);
+      const updated = satellites.find(s => (s as any).noradId === selectedSatellite.noradId);
       if (updated) {
-        setSelectedSatellite(updated);
+        setSelectedSatellite(updated as SatelliteTelemetry);
       }
     }
   }, [satellites]);
 
-  const handleInvestigate = (alert: AnomalyAlert) => {
-    setInvestigateMessage(`Investigate anomaly: ${alert.severity} severity ${alert.metric} on ${alert.satelliteName}. Current value: ${alert.currentValue.toFixed(2)}, baseline: ${alert.baselineValue.toFixed(2)}.`);
+  const handleSatelliteClick = (sat: any) => {
+    setSelectedSatellite(sat as SatelliteTelemetry);
   };
 
-  const handleSatelliteClick = (sat: SatelliteState) => {
-    setSelectedSatellite(sat);
-  };
-
-  const getForecastForMetric = () => {
-    switch (selectedMetric) {
-      case 'temperature': return temperatureForecast;
-      case 'battery': return batteryForecast;
-      case 'signalStrength': return signalForecast;
-      default: return [];
-    }
-  };
-
-  if (loading) {
+  if (pollingLoading && satellites.length === 0) {
     return (
       <div className="min-h-screen bg-darker flex items-center justify-center">
         <div className="text-center">
@@ -81,53 +103,68 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-darker flex items-center justify-center">
-        <div className="text-center p-8 bg-card border border-red-500/30 rounded-xl">
-          <p className="text-red-500 text-lg mb-2">Error loading telemetry</p>
-          <p className="text-gray-400">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-darker">
-      <Header alertCount={alertCount} />
+      <Header alertCount={alerts.length} />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <Hero lastUpdated={lastUpdated} satelliteCount={satellites.length} />
+        <Hero
+          lastUpdated={lastUpdate || lastFetched}
+          satelliteCount={satellites.length}
+          connected={connected}
+        />
 
-        {hasPredictedAnomaly && timeToAnomaly !== null && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-between">
+        {spaceWeather?.geomagneticStorm?.active && (
+          <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">PREDICTED ANOMALY</span>
-              <span className="text-gray-300">Anomaly predicted in {timeToAnomaly} minutes</span>
+              <AlertCircle className="w-5 h-5 text-amber-500" />
+              <span className="text-gray-300">
+                Active {spaceWeather.geomagneticStorm.level} geomagnetic storm (Kp: {spaceWeather.geomagneticStorm.kpIndex})
+              </span>
             </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-1 space-y-4">
-            <EarthGlobe satellites={satellites} onSatelliteClick={handleSatelliteClick} />
-            <SatelliteSelector
-              satellites={satellites}
-              selectedSatellite={selectedSatellite}
-              onSelect={setSelectedSatellite}
-            />
+            <EarthGlobe satellites={toSatelliteStateArray(satellites)} onSatelliteClick={handleSatelliteClick} />
+
+            <div className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Globe className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Satellites</h3>
+              </div>
+              <div className="space-y-2">
+                {satellites.map((sat: any) => (
+                  <button
+                    key={sat.noradId}
+                    onClick={() => handleSatelliteClick(sat)}
+                    className={`w-full text-left p-2 rounded-lg transition-colors ${
+                      selectedSatellite?.noradId === sat.noradId
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-darker hover:bg-darker/80 text-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{sat.name}</span>
+                      <span className="text-xs text-gray-500">{sat.altitude?.toFixed(0)} km</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="lg:col-span-2 space-y-6">
             {selectedSatellite && (
               <>
-                <TelemetryGrid satellite={selectedSatellite} />
+                <TelemetryGrid satellite={toSatelliteState(selectedSatellite)} />
 
                 <div className="bg-card border border-border rounded-xl p-4">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Activity className="w-5 h-5 text-primary" />
-                      <h3 className="text-lg font-semibold">Telemetry History & Forecast</h3>
+                      <h3 className="text-lg font-semibold">Telemetry History</h3>
                     </div>
                     <div className="flex gap-2">
                       {(['temperature', 'battery', 'signalStrength'] as const).map((m) => (
@@ -146,8 +183,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <TelemetryChart
-                    satellite={selectedSatellite}
-                    forecast={getForecastForMetric()}
+                    satellite={toSatelliteState(selectedSatellite)}
                     metric={selectedMetric}
                   />
                 </div>
@@ -161,30 +197,22 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-4">
               <Eye className="w-5 h-5 text-accent" />
               <h3 className="text-lg font-semibold">AI Anomaly Alerts</h3>
-              {alertCount > 0 && (
+              {alerts.length > 0 && (
                 <span className="px-2 py-0.5 bg-red-500/20 text-red-500 text-xs rounded">
-                  {alertCount} active
+                  {alerts.length} active
                 </span>
               )}
             </div>
-            <AnomalyAlerts
-              alerts={alerts}
-              onAcknowledge={acknowledgeAlert}
-              onInvestigate={handleInvestigate}
-            />
+            <AnomalyAlertFeed alerts={alerts} />
           </div>
 
-          <CommandPanel />
+          <ModelExplainability />
         </div>
       </main>
 
       <Footer />
 
-      <SatelliteAssistant
-        satellites={satellites}
-        alerts={alerts}
-        initialMessage={investigateMessage || undefined}
-      />
+      <ChatBot />
     </div>
   );
 }

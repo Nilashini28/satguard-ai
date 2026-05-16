@@ -7,7 +7,7 @@ import { detectTrendDirection } from '@/lib/forecastEngine';
 
 interface TelemetryCardProps {
   label: string;
-  value: number;
+  value: number | null | undefined;
   unit: string;
   icon: React.ReactNode;
   satellite?: SatelliteState;
@@ -85,12 +85,7 @@ export default function TelemetryCard({ label, value, unit, icon, satellite, met
     }
   };
 
-  const formatValue = () => {
-    if (metric === 'signalStrength' && value === -999) return '--';
-    if (metric === 'battery' || metric === 'altitude') return value.toFixed(metric === 'altitude' ? 1 : 0);
-    if (metric === 'velocity') return value.toFixed(3);
-    return value.toFixed(1);
-  };
+  const isLoading = value === null || value === undefined;
 
   return (
     <div className={`bg-card border ${getBorderColor()} rounded-xl p-4 relative overflow-hidden transition-all duration-300`}>
@@ -106,11 +101,20 @@ export default function TelemetryCard({ label, value, unit, icon, satellite, met
       </div>
 
       <div className={`text-3xl font-bold font-mono ${getStatusColor()} transition-all duration-300`}>
-        {formatValue()} <span className="text-lg text-gray-500">{unit}</span>
+        {isLoading ? (
+          <span className="text-gray-500 text-lg animate-pulse">Fetching live data...</span>
+        ) : (
+          <>
+            {metric === 'battery' || metric === 'altitude' ? value.toFixed(metric === 'altitude' ? 1 : 0) : value.toFixed(1)}
+            <span className="text-lg text-gray-500"> {unit}</span>
+          </>
+        )}
       </div>
 
       <div className="flex items-center justify-between mt-3">
-        <Sparkline data={historyData} color={getSparklineColor()} />
+        {!isLoading && historyData.length > 0 && (
+          <Sparkline data={historyData} color={getSparklineColor()} />
+        )}
 
         <div className="flex items-center gap-1">
           {trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500" />}
