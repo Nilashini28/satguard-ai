@@ -46,7 +46,7 @@ async function fetchISSPosition(): Promise<{ latitude: number; longitude: number
       latitude: data.latitude,
       longitude: data.longitude,
       altitude: data.altitude,
-      velocity: data.velocity
+      velocity: data.velocity / 3600 // Convert from km/h to km/s
     };
   } catch (error) {
     console.error('ISS API error:', error);
