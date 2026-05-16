@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SATGUARD AI",
-  description: "Satellite Telemetry Monitoring & AI Anomaly Detection",
+  description: "Real-time satellite telemetry monitoring with AI anomaly detection",
 };
 
 export default function RootLayout({
@@ -12,8 +12,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased text-gray-100">{children}</body>
+    <html lang="en" className="dark">
+      <body className="antialiased text-gray-100 bg-background min-h-screen">
+        {children}
+      </body>
     </html>
   );
 }

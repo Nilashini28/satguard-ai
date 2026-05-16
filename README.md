@@ -1,108 +1,84 @@
 # SATGUARD AI
 
-## 🚀 Project Overview
+### Real-time Satellite Telemetry Monitoring & AI Anomaly Detection
 
-**SATGUARD AI** is an advanced satellite health monitoring system that provides real-time telemetry monitoring and AI-powered anomaly detection for satellite fleets in orbit.
+**Problem:** Satellite operators manually monitor dozens of parameters across multiple spacecraft. Anomalies are caught late, explanations take time, and there is no predictive capability.
 
-## 🎯 Main Goal
+**Solution:** SATGUARD AI ingests live TLE orbital data, derives real-time telemetry, detects anomalies using statistical and rule-based AI, generates natural-language explanations via Claude, and forecasts failures before they happen.
 
-The primary objective of SATGUARD AI is to enable satellite operators, mission control teams, and space agencies to:
+## Architecture
 
-- **Monitor** real-time telemetry data (altitude, velocity, temperature, battery, signal strength) from multiple satellites
-- **Detect** anomalies instantly using AI algorithms before they cause mission-critical failures
-- **Predict** potential system failures using machine learning analytics
-- **Manage** entire satellite fleets from a unified dashboard
+CelesTrak TLE API → satellite.js propagation → Telemetry Engine → Anomaly Detection (statistical + rules) → Claude Haiku (narration + assistant) → React Dashboard
 
-## 🌍 Real-World Applications
+## Tech Stack
 
-### 1. Mission Control Centers
-Satellite operators use SATGUARD AI to monitor constellation health, receive instant alerts when anomalies occur, and make data-driven decisions about satellite maneuvers.
+- **Frontend:** React 18 + TypeScript + Next.js 14
+- **3D Visualization:** Three.js + satellite.js
+- **Charts:** Recharts
+- **AI:** Anthropic Claude Haiku (anomaly narration + RAG assistant)
+- **Data:** CelesTrak TLE API (free, real-time)
+- **Deployment:** Vercel
 
-### 2. Space Agencies
-Government and private space agencies deploy SATGUARD AI to:
-- Monitor Earth observation satellites
-- Track communication satellites in GEO/MEO/LEO orbits
-- Manage satellite constellation health during critical missions
+## Features
 
-### 3. Commercial Satellite Operators
-- Reduce satellite downtime through early anomaly detection
-- Optimize satellite fleet maintenance schedules
-- Minimize mission failure risks with predictive analytics
+- Live orbital mechanics for 5 real satellites (ISS, NOAA 19, TERRA, AQUA, Sentinel-2A)
+- Statistical z-score + rule-based anomaly detection with confidence scoring
+- AI-generated alert narration (Claude Haiku, streamed)
+- 30-minute predictive forecasting with danger threshold warnings
+- 3D interactive orbital globe with real orbit tracks
+- Mission control command simulation terminal
+- RAG-powered satellite operations chat assistant
+- Dark/light mode, fully responsive
+- Mobile-first responsive design
 
-### 4. Research & Development
-- Test and validate new satellite systems
-- Study orbital behavior patterns
-- Analyze radiation effects on satellite subsystems
+## Tracked Satellites
 
-## ✨ Project Novelty
+| Satellite | NORAD ID | Orbit |
+|-----------|----------|-------|
+| ISS (ZARYA) | 25544 | LEO |
+| NOAA 19 | 33591 | LEO |
+| TERRA | 25994 | LEO |
+| AQUA | 27424 | LEO |
+| SENTINEL-2A | 40697 | LEO |
 
-### AI-Powered Anomaly Detection
-Unlike traditional rule-based monitoring systems, SATGUARD AI employs machine learning algorithms to detect subtle anomalies that human operators might miss. The system learns from historical telemetry data to identify patterns that indicate potential failures.
-
-### Real-Time Dashboard
-- Live telemetry visualization with interactive charts
-- Instant AI-generated anomaly alerts with severity scoring
-- Fleet-wide health monitoring in a single view
-
-### Digital DNA System
-Each satellite develops a unique behavioral "fingerprint" based on its operational history. SATGUARD AI compares current behavior against this baseline to detect deviations that may indicate degrading performance.
-
-### Predictive Risk Analysis
-The system doesn't just detect current anomalies—it predicts future risks by analyzing trends and trajectories, allowing operators to take preventive action before failures occur.
-
-### Multi-Sensor Correlation
-SATGUARD AI correlates data across multiple sensors (temperature, power, communication, orientation) to identify complex anomalies that single-sensor monitoring would miss.
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
-- **Charts**: Recharts
-- **Icons**: Lucide React
-- **API**: REST endpoints with mock telemetry data
-- **Deployment**: Vercel-ready
-
-## 📊 Features
-
-- Real-time satellite telemetry monitoring
-- AI anomaly detection with severity levels (critical/high/medium/low)
-- Interactive charts for telemetry analysis
-- Satellite fleet status overview
-- Signal strength monitoring
-- Battery and velocity correlation analysis
-- Modal view for all alerts with acknowledge functionality
-- Dark futuristic UI design
-
-## 🚀 Getting Started
+## Running Locally
 
 ```bash
-# Install dependencies
+git clone https://github.com/Nilashini28/satguard-ai
+cd satguard-ai
 npm install
-
-# Run development server
+cp .env.example .env.local
+# Add your Anthropic API key to .env.local (free tier works)
 npm run dev
-
-# Build for production
-npm run build
-
-# Deploy to Vercel
-vercel deploy
 ```
 
-## 📁 Project Structure
+## Environment Variables
+
+Create a `.env.local` file:
 
 ```
-satguard-ai/
-├── src/app/
-│   ├── page.tsx          # Main dashboard
-│   ├── layout.tsx        # Root layout
-│   ├── globals.css       # Global styles
-│   └── api/telemetry/    # Mock telemetry API
-├── package.json
-├── tailwind.config.ts
-├── tsconfig.json
-└── README.md
+VITE_ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
----
+The free tier of Anthropic API works with the Haiku model at no cost.
 
-**SATGUARD AI** — Securing the future of space operations with intelligent monitoring.
+## Deployment
+
+Deploy to Vercel:
+
+```bash
+npm install -g vercel
+vercel --prod
+```
+
+Set `VITE_ANTHROPIC_API_KEY` in Vercel project settings.
+
+## Data Sources
+
+- **Satellite TLE:** CelesTrak SOCRATES API (free, no auth required)
+- **Position Propagation:** satellite.js library
+- **Ground Station:** Chennai, India (13.08°N, 80.27°E)
+
+## License
+
+MIT
