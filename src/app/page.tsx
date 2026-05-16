@@ -50,6 +50,16 @@ interface SatelliteStatus {
   uptime: string;
 }
 
+interface RealSatellite {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  velocity: number;
+  orbit: string;
+}
+
 const generateTelemetry = (): TelemetryData[] => {
   const data: TelemetryData[] = [];
   const now = new Date();
@@ -87,6 +97,9 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
   const [showAllAlerts, setShowAllAlerts] = useState(false);
+  const [realSatellites, setRealSatellites] = useState<RealSatellite[]>([]);
+  const [selectedSatellite, setSelectedSatellite] = useState<RealSatellite | null>(null);
+  const [isLoadingSatellites, setIsLoadingSatellites] = useState(true);
 
   const allAnomalies: Anomaly[] = [
     { id: "1", type: "Thermal", severity: "high", message: "Temperature anomaly detected in solar panel array", timestamp: "2 min ago" },
@@ -113,6 +126,39 @@ export default function Dashboard() {
       setTelemetry(newData);
       setCurrentData(newData[newData.length - 1]);
     }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch real satellite data from Celestrak API
+  useEffect(() => {
+    const fetchRealSatellites = async () => {
+      try {
+        const response = await fetch("/api/satellites");
+        const data = await response.json();
+        if (data.satellites && data.satellites.length > 0) {
+          setRealSatellites(data.satellites);
+          setSelectedSatellite(data.satellites[0]);
+          // Update current data with real satellite
+          const sat = data.satellites[0];
+          setCurrentData({
+            time: new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" }),
+            altitude: sat.altitude,
+            velocity: sat.velocity,
+            temperature: -15 + Math.random() * 10,
+            battery: 75 + Math.random() * 20,
+            signal: 85 + Math.random() * 15,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch real satellite data:", error);
+      } finally {
+        setIsLoadingSatellites(false);
+      }
+    };
+
+    fetchRealSatellites();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchRealSatellites, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -333,23 +379,65 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-6">
               <Shield className="w-5 h-5 text-green-500" />
-              <h2 className="text-lg font-semibold">Satellite Fleet Status</h2>
+              <h2 className="text-lg font-semibold">Real-Time Satellite Positions</h2>
+              {isLoadingSatellites && <span className="text-xs text-gray-500 animate-pulse">Loading...</span>}
             </div>
-            <div className="space-y-3">
-              {satellites.map((sat) => (
-                <div key={sat.name} className="flex items-center justify-between p-3 bg-darker rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${sat.status === "operational" ? "bg-primary" : sat.status === "warning" ? "bg-yellow-500" : "bg-red-500"}`} />
-                    <div>
-                      <span className="font-semibold">{sat.name}</span>
-                      <span className="text-xs text-gray-500 ml-2">{sat.orbit}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-sm font-mono ${getStatusColor(sat.status)}`}>{sat.uptime}</span>
-                  </div>
+
+            {/* Satellite Selector */}
+            {realSatellites.length > 0 && (
+              <div className="mb-4 p-3 bg-darker rounded-lg">
+                <label className="text-xs text-gray-400 mb-2 block">Select Satellite:</label>
+                <select
+                  className="w-full bg-card border border-border rounded-lg p-2 text-sm text-gray-100"
+                  value={selectedSatellite?.id || ""}
+                  onChange={(e) => {
+                    const sat = realSatellites.find(s => s.id === e.target.value);
+                    if (sat) setSelectedSatellite(sat);
+                  }}
+                >
+                  {realSatellites.map((sat) => (
+                    <option key={sat.id} value={sat.id}>
+                      {sat.name.length > 40 ? sat.name.substring(0, 40) + "..." : sat.name} ({sat.orbit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {selectedSatellite && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-darker rounded-lg">
+                  <div className="text-xs text-gray-500 mb-1">Latitude</div>
+                  <div className="text-lg font-mono text-primary">{selectedSatellite.latitude.toFixed(4)}°</div>
                 </div>
-              ))}
+                <div className="p-3 bg-darker rounded-lg">
+                  <div className="text-xs text-gray-500 mb-1">Longitude</div>
+                  <div className="text-lg font-mono text-secondary">{selectedSatellite.longitude.toFixed(4)}°</div>
+                </div>
+                <div className="p-3 bg-darker rounded-lg">
+                  <div className="text-xs text-gray-500 mb-1">Altitude</div>
+                  <div className="text-lg font-mono text-accent">{selectedSatellite.altitude.toFixed(1)} km</div>
+                </div>
+                <div className="p-3 bg-darker rounded-lg">
+                  <div className="text-xs text-gray-500 mb-1">Velocity</div>
+                  <div className="text-lg font-mono text-green-500">{selectedSatellite.velocity.toFixed(2)} km/s</div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="text-xs text-gray-500 mb-2">All Tracked Satellites:</div>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {realSatellites.map((sat) => (
+                  <div key={sat.id} className="flex items-center justify-between p-2 bg-darker/50 rounded text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="text-gray-300">{sat.name.substring(0, 25)}...</span>
+                    </div>
+                    <span className="text-gray-500">{sat.orbit}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
