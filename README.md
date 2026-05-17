@@ -1,84 +1,136 @@
-# SATGUARD AI
+📡 SATGUARD-AI
+Real-Time Satellite Telemetry & Orbital Tracking Dashboard
 
-### Real-time Satellite Telemetry Monitoring & AI Anomaly Detection
+Live Demo: https://satguard-ai.vercel.app/
 
-**Problem:** Satellite operators manually monitor dozens of parameters across multiple spacecraft. Anomalies are caught late, explanations take time, and there is no predictive capability.
+🚀 What Is SATGUARD-AI?
 
-**Solution:** SATGUARD AI ingests live TLE orbital data, derives real-time telemetry, detects anomalies using statistical and rule-based AI, generates natural-language explanations via Claude, and forecasts failures before they happen.
+SATGUARD-AI is a space-data intelligence platform that transforms raw satellite orbital data into live real-time telemetry and orbital insights.
 
-## Architecture
+Rather than just showing a satellite moving on a map, SATGUARD-AI:
 
-CelesTrak TLE API → satellite.js propagation → Telemetry Engine → Anomaly Detection (statistical + rules) → Claude Haiku (narration + assistant) → React Dashboard
+Computes precise orbital coordinates
+Calculates orbital telemetry
+Shows real-time motion based on current timestamps
+Uses serverless architecture for reliable production deployment
+🛰️ Core Features (For Hackathon Impact)
+🎯 1. Real-Time Satellite Tracking
+Fetches live orbital data (TLE)
+Uses SGP4 propagation
+Displays real-time position updates (lat, lon, alt, velocity)
+📊 2. Telemetry Computation Dashboard
 
-## Tech Stack
+Displays essential orbital data such as:
 
-- **Frontend:** React 18 + TypeScript + Next.js 14
-- **3D Visualization:** Three.js + satellite.js
-- **Charts:** Recharts
-- **AI:** Anthropic Claude Haiku (anomaly narration + RAG assistant)
-- **Data:** CelesTrak TLE API (free, real-time)
-- **Deployment:** Vercel
+Altitude
+Velocity
+Latitude & Longitude
+Orbital Period
+Visibility & Tracking Details
 
-## Features
+This turns math into meaningful data for observers, engineers or analysts.
 
-- Live orbital mechanics for 5 real satellites (ISS, NOAA 19, TERRA, AQUA, Sentinel-2A)
-- Statistical z-score + rule-based anomaly detection with confidence scoring
-- AI-generated alert narration (Claude Haiku, streamed)
-- 30-minute predictive forecasting with danger threshold warnings
-- 3D interactive orbital globe with real orbit tracks
-- Mission control command simulation terminal
-- RAG-powered satellite operations chat assistant
-- Dark/light mode, fully responsive
-- Mobile-first responsive design
+⚙️ 3. Orbital Propagation Engine
 
-## Tracked Satellites
+Powered by satellite.js:
 
-| Satellite | NORAD ID | Orbit |
-|-----------|----------|-------|
-| ISS (ZARYA) | 25544 | LEO |
-| NOAA 19 | 33591 | LEO |
-| TERRA | 25994 | LEO |
-| AQUA | 27424 | LEO |
-| SENTINEL-2A | 40697 | LEO |
+Converts TLE → ECI → Geodetic coordinates
+Accurate position calculation at any timepoint
+Updates continuously
+🔁 4. Smart Serverless API Layer
+Fetches TLE data from reliable sources
+Caches to avoid rate limits
+Serves telemetry data to frontend
+Fault-tolerant and reliable in production
+📈 5. Lightweight & Production-Ready
+Fast frontend (Next.js/React)
+Edge-deployed on Vercel
+Designed for scalability
+🧠 6. AI-Ready Architecture
 
-## Running Locally
+Already structured to integrate:
 
-```bash
-git clone https://github.com/Nilashini28/satguard-ai
+Explainable AI insights
+Natural language satellite reports
+Orbit anomaly detection
+Predictive orbital behavior
+🧠 How It Works
+Satellite TLE Source
+        │
+        ▼
+Serverless API (on Vercel)
+  • Fetch latest TLE
+  • Cache + fallback
+  • Compute position
+        │
+        ▼
+Frontend (Next.js / React)
+  • Real-time updates
+  • Telemetry dashboard
+  • Interactive visualization
+📁 Project Structure
+satguard-ai/
+├── public/                
+├── src/
+│   ├── components/      # UI components & telemetry dashboard
+│   ├── lib/             # Orbital logic (SGP4, coordinate transforms)
+│   ├── pages/
+│   │   ├── index.js     # Main interface
+│   │   └── api/
+│   │       └── tle.js   # Fetch + cache TLE endpoint
+│   └── styles/
+├── .env.example         # Environment variables
+├── package.json
+├── README.md
+└── vercel.json          # Deployment config
+📦 Tech Stack
+Layer	Technology
+Frontend	Next.js / React
+Orbital Computation	satellite.js (SGP4)
+Backend	Vercel Serverless Functions
+Hosting	Vercel
+Data	Public TLE sources (e.g., CelesTrak)
+✨ Installation (Local Dev)
+# Clone the repo
+git clone https://github.com/your-username/satguard-ai.git
 cd satguard-ai
+
+# Install
 npm install
-cp .env.example .env.local
-# Add your Anthropic API key to .env.local (free tier works)
+
+# Start locally
 npm run dev
-```
 
-## Environment Variables
+Visit: http://localhost:3000
 
-Create a `.env.local` file:
+⚙️ Configuration (.env)
 
-```
-VITE_ANTHROPIC_API_KEY=your_anthropic_api_key_here
-```
+Create a .env.local:
 
-The free tier of Anthropic API works with the Haiku model at no cost.
+TLE_SOURCE_URL=https://celestrak.com/NORAD/elements/active.txt
 
-## Deployment
+You can customize data source URLs or caching behavior here.
 
-Deploy to Vercel:
+🧪 Testing & Validation
+npm test
 
-```bash
-npm install -g vercel
-vercel --prod
-```
+Add tests for:
 
-Set `VITE_ANTHROPIC_API_KEY` in Vercel project settings.
+Orbital utility logic
+API response correctness
 
-## Data Sources
+This project is not a simple map tracker — it’s a mini mission control engine.
 
-- **Satellite TLE:** CelesTrak SOCRATES API (free, no auth required)
-- **Position Propagation:** satellite.js library
-- **Ground Station:** Chennai, India (13.08°N, 80.27°E)
+⭐ Future Enhancements
+AI voice reports of satellite states
+Anomaly detection & alerts
+Multi-satellite tracking overlays
+Ground station visibility prediction
+Seasonal orbital graphs
+📜 License
 
-## License
+Distributed under the MIT License.
 
-MIT
+🙌 Acknowledgements
+
+Made with ❤️ for space enthusiasts, engineers, and future satellite missions.
