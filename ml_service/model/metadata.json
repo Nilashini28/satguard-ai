@@ -1,0 +1,31 @@
+{
+  "model_version": "1.0.0",
+  "trained_at": "2026-05-16T18:37:43.732321Z",
+  "training_samples": 50000,
+  "anomaly_rate": 0.05,
+  "features": [
+    "altitude_km",
+    "velocity_kms",
+    "temperature_c",
+    "battery_pct",
+    "solar_flux",
+    "signal_snr_db",
+    "orbital_inclination",
+    "eccentricity",
+    "in_eclipse"
+  ],
+  "isolation_forest_roc_auc": 0.8977,
+  "lstm_threshold": null,
+  "shap_feature_importance": {
+    "altitude_km": 0.5,
+    "velocity_kms": 0.5,
+    "temperature_c": 0.5,
+    "battery_pct": 0.5,
+    "solar_flux": 0.5,
+    "signal_snr_db": 0.5,
+    "orbital_inclination": 0.5,
+    "eccentricity": 0.5,
+    "in_eclipse": 0.5
+  },
+  "data_source": "Physics-based simulation with NASA DONKI labels"
+}
