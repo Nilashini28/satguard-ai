@@ -1,91 +1,40 @@
-"use client";
-
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { SatelliteState, AnomalyAlert } from '@/types/satellite';
-import { analyzeTelemetryForAnomalies, determineSatelliteStatus } from '@/lib/anomalyEngine';
-import { streamAnomalyNarration } from '@/lib/claudeClient';
+'use client'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { AnomalyAlert, SatelliteState } from '@/types/satellite'
+import { detectAnomalies } from '@/lib/anomalyEngine'
+import { narrate } from '@/lib/groqClient'
 
 export function useAnomalyDetection(satellites: SatelliteState[]) {
-  const [allAlerts, setAllAlerts] = useState<AnomalyAlert[]>([]);
-  const [alertNarrationMap, setAlertNarrationMap] = useState<Map<string, { text: string; loading: boolean }>>(new Map());
+  const [alerts, setAlerts] = useState<AnomalyAlert[]>([])
+  const seen = useRef<Set<string>>(new Set())
 
-  const generateNarration = useCallback(async (alert: AnomalyAlert) => {
-    setAlertNarrationMap(prev => new Map(prev).set(alert.id, { text: '', loading: true }));
-
-    let narration = '';
-    await streamAnomalyNarration(alert, (chunk) => {
-      narration += chunk;
-      setAlertNarrationMap(prev => {
-        const newMap = new Map(prev);
-        newMap.set(alert.id, { text: narration, loading: false });
-        return newMap;
-      });
-    });
-  }, []);
-
-  const alertsWithNarration = useMemo(() => {
-    return allAlerts.map(alert => {
-      const narrationData = alertNarrationMap.get(alert.id);
-      return {
-        ...alert,
-        narration: narrationData?.text ?? alert.narration,
-        narrationLoading: narrationData?.loading ?? alert.narrationLoading
-      };
-    });
-  }, [allAlerts, alertNarrationMap]);
+  const addNarration = useCallback(async (id: string, alert: AnomalyAlert) => {
+    const narration = await narrate(alert)
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, narration, narrationLoading: false } : a))
+  }, [])
 
   useEffect(() => {
-    const newAlerts: AnomalyAlert[] = [];
-    const alertKeySet = new Set(allAlerts.map(a => `${a.satelliteName}-${a.metric}`));
-
+    if (!satellites.length) return
+    const newAlerts: AnomalyAlert[] = []
     for (const sat of satellites) {
-      if (!sat.history || sat.history.length < 5) continue;
-
-      const currentSnapshot = sat.history[sat.history.length - 1];
-      const previousSnapshots = sat.history.slice(-20);
-
-      const alerts = analyzeTelemetryForAnomalies(sat.name, currentSnapshot, previousSnapshots);
-
-      for (const alert of alerts) {
-        const key = `${alert.satelliteName}-${alert.metric}`;
-        if (!alertKeySet.has(key)) {
-          newAlerts.push(alert);
-          alertKeySet.add(key);
-        }
+      for (const raw of detectAnomalies(sat, seen.current)) {
+        const alert: AnomalyAlert = { ...raw, narration: '', narrationLoading: true, acknowledged: false }
+        newAlerts.push(alert)
       }
     }
-
     if (newAlerts.length > 0) {
-      setAllAlerts(prev => [...newAlerts, ...prev]);
-
-      newAlerts.forEach(alert => {
-        generateNarration(alert);
-      });
+      setAlerts(prev => [...newAlerts, ...prev].slice(0, 50))
+      newAlerts.forEach(a => addNarration(a.id, a))
     }
-  }, [satellites]);
+  }, [satellites, addNarration])
 
-  const acknowledgeAlert = useCallback((alertId: string) => {
-    setAllAlerts(prev =>
-      prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a)
-    );
-  }, []);
-
-  const activeAlerts = alertsWithNarration.filter(a => !a.acknowledged);
-
-  const satelliteStatuses = useMemo(() => {
-    const statuses: Record<string, 'nominal' | 'warning' | 'critical'> = {};
-    for (const sat of satellites) {
-      const satAlerts = activeAlerts.filter(a => a.satelliteName === sat.name);
-      statuses[sat.noradId] = determineSatelliteStatus(satAlerts);
-    }
-    return statuses;
-  }, [satellites, activeAlerts]);
+  const acknowledge = useCallback((id: string) => {
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true } : a))
+  }, [])
 
   return {
-    alerts: activeAlerts,
-    allAlerts: alertsWithNarration,
-    acknowledgeAlert,
-    alertCount: activeAlerts.length,
-    satelliteStatuses
-  };
+    activeAlerts: alerts.filter(a => !a.acknowledged),
+    historicalAlerts: alerts.filter(a => a.acknowledged),
+    acknowledge,
+  }
 }

@@ -1,21 +1,18 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "SATGUARD AI",
-  description: "Real-time satellite telemetry monitoring with AI anomaly detection",
-};
+  title: 'SATGUARD AI — Satellite Telemetry Monitoring',
+  description: 'Real-time satellite telemetry monitoring with AI anomaly detection, predictive forecasting, and mission control.',
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="antialiased text-gray-100 bg-background min-h-screen">
-        {children}
-      </body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} bg-gray-950`}>{children}</body>
     </html>
-  );
+  )
 }

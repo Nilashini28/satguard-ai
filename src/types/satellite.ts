@@ -1,89 +1,73 @@
-export interface TleData {
-  name: string;
-  line1: string;
-  line2: string;
-  noradId?: number;
-}
+export type EclipseStatus = 'sunlit' | 'eclipse'
+export type SatelliteStatus = 'nominal' | 'warning' | 'critical'
+export type AlertSeverity = 'HIGH' | 'MEDIUM' | 'LOW'
+export type DetectionMethod = 'statistical' | 'threshold'
+export type DataSource = 'live' | 'cached' | 'loading'
 
 export interface TelemetrySnapshot {
-  timestamp: Date;
-  altitude: number;
-  velocity: number;
-  temperature: number;
-  battery: number;
-  signalStrength: number | null;
-  lat: number;
-  lng: number;
-  eclipseStatus: 'sunlit' | 'eclipse';
+  timestamp: number
+  altitude: number
+  velocity: number
+  temperature: number
+  battery: number
+  signalStrength: number | null
 }
-
-export type SatelliteStatus = 'nominal' | 'warning' | 'critical';
 
 export interface SatelliteState {
-  noradId: string;
-  name: string;
-  altitude: number;
-  velocity: number;
-  temperature: number;
-  battery: number;
-  signalStrength: number | null;
-  lat: number;
-  lng: number;
-  eclipseStatus: 'sunlit' | 'eclipse';
-  status: SatelliteStatus;
-  history: TelemetrySnapshot[];
+  noradId: string
+  name: string
+  altitude: number
+  velocity: number
+  temperature: number
+  battery: number
+  signalStrength: number | null
+  lat: number
+  lng: number
+  eclipseStatus: EclipseStatus
+  status: SatelliteStatus
+  history: TelemetrySnapshot[]
+  dataSource: DataSource
 }
-
-export type AnomalySeverity = 'HIGH' | 'MEDIUM' | 'LOW';
-export type DetectionMethod = 'statistical' | 'threshold' | 'trend';
 
 export interface AnomalyAlert {
-  id: string;
-  satelliteName: string;
-  metric: string;
-  currentValue: number;
-  baselineValue: number;
-  threshold: number;
-  severity: AnomalySeverity;
-  confidence: number;
-  detectionMethod: DetectionMethod;
-  timestamp: Date;
-  narration: string;
-  narrationLoading: boolean;
-  acknowledged: boolean;
+  id: string
+  satelliteName: string
+  noradId: string
+  metric: string
+  currentValue: number
+  baselineValue: number
+  severity: AlertSeverity
+  confidence: number
+  detectionMethod: DetectionMethod
+  timestamp: Date
+  narration: string
+  narrationLoading: boolean
+  acknowledged: boolean
 }
 
-export interface SatellitePosition {
-  lat: number;
-  lng: number;
-  altitude: number;
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
 }
 
-export interface ForecastPoint {
-  timestamp: Date;
-  value: number;
-  lower: number;
-  upper: number;
-  isAnomaly: boolean;
+export interface CommandLog {
+  id: string
+  text: string
+  type: 'system' | 'info' | 'success' | 'error'
+  timestamp: number
 }
 
-export interface TrackedSatellite {
-  id: string;
-  name: string;
-  noradId: number;
-  tle: TleData;
+export const SATELLITES = [
+  { noradId: '25544', name: 'ISS (ZARYA)' },
+  { noradId: '33591', name: 'NOAA 19' },
+  { noradId: '25994', name: 'TERRA' },
+  { noradId: '27424', name: 'AQUA' },
+  { noradId: '40697', name: 'SENTINEL-2A' },
+]
+
+export const THRESHOLDS = {
+  temperature: { critical_high: 125, critical_low: -100, warn_high: 110, warn_low: -85 },
+  battery: { critical_low: 10, warn_low: 20 },
+  signal: { warn: -110, critical: -118 },
 }
-
-export const TRACKED_SATELLITES: TrackedSatellite[] = [
-  { id: 'ISS', name: 'ISS (ZARYA)', noradId: 25544, tle: { name: 'ISS (ZARYA)', line1: '', line2: '' } },
-  { id: 'NOAA-19', name: 'NOAA 19', noradId: 33591, tle: { name: 'NOAA 19', line1: '', line2: '' } },
-  { id: 'TERRA', name: 'TERRA', noradId: 25994, tle: { name: 'TERRA', line1: '', line2: '' } },
-  { id: 'AQUA', name: 'AQUA', noradId: 27424, tle: { name: 'AQUA', line1: '', line2: '' } },
-  { id: 'SENTINEL-2A', name: 'SENTINEL-2A', noradId: 40697, tle: { name: 'SENTINEL-2A', line1: '', line2: '' } },
-];
-
-export const GROUND_STATION = {
-  lat: 13.08,
-  lng: 80.27,
-  name: 'Chennai, India'
-};

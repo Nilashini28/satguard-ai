@@ -1,247 +1,83 @@
-import type { TelemetrySnapshot, AnomalyAlert, AnomalySeverity, DetectionMethod } from '@/types/satellite';
+import { AnomalyAlert, AlertSeverity, DetectionMethod, SatelliteState, THRESHOLDS } from '@/types/satellite'
 
-interface StatisticalBaseline {
-  mean: number;
-  std: number;
+function mean(arr: number[]) { return arr.reduce((a, b) => a + b, 0) / arr.length }
+function std(arr: number[], avg: number) {
+  return Math.sqrt(arr.reduce((s, v) => s + (v - avg) ** 2, 0) / arr.length)
 }
 
-function calculateStatistics(samples: number[]): StatisticalBaseline {
-  if (samples.length === 0) return { mean: 0, std: 1 };
+export function detectAnomalies(
+  sat: SatelliteState,
+  seen: Set<string>
+): Omit<AnomalyAlert, 'narration' | 'narrationLoading' | 'acknowledged'>[] {
+  const results: Omit<AnomalyAlert, 'narration' | 'narrationLoading' | 'acknowledged'>[] = []
+  const bucket = Math.floor(Date.now() / 30000)
 
-  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-  const variance = samples.reduce((sum, val) => sum + (val - mean) ** 2, 0) / samples.length;
-  const std = Math.sqrt(variance) || 1;
+  function check(
+    key: keyof typeof THRESHOLDS | string,
+    label: string,
+    current: number | null,
+    getHistory: () => number[]
+  ) {
+    if (current === null) return
+    const id = `${sat.noradId}-${key}-${bucket}`
+    if (seen.has(id)) return
 
-  return { mean, std };
-}
+    let detected = false
+    let severity: AlertSeverity = 'LOW'
+    let confidence = 70
+    let method: DetectionMethod = 'threshold'
+    let baseline = current
 
-export function detectStatisticalAnomaly(
-  currentValue: number,
-  history: number[],
-  threshold: number = 2.5
-): { isAnomaly: boolean; confidence: number; baseline: number } {
-  const window = history.slice(-20);
-  if (window.length < 5) {
-    return { isAnomaly: false, confidence: 0, baseline: currentValue };
-  }
-
-  const { mean, std } = calculateStatistics(window);
-  const zscore = std > 0 ? Math.abs(currentValue - mean) / std : 0;
-
-  const isAnomaly = zscore > threshold;
-  const confidence = Math.min(100, Math.round((zscore / threshold) * 100));
-
-  return { isAnomaly, confidence, baseline: mean };
-}
-
-const THRESHOLDS = {
-  temperature: { high: 125, low: -100 },
-  battery: { low: 15 },
-  signal: { low: -118 },
-  altitudeDrift: 3,
-  velocityDeviation: 0.15
-};
-
-export function detectThresholdAnomaly(
-  metric: string,
-  value: number,
-  baseline: number,
-  previousValue?: number
-): { isAnomaly: boolean; severity: AnomalySeverity; threshold: number } {
-  switch (metric) {
-    case 'temperature':
-      if (value > THRESHOLDS.temperature.high) {
-        return { isAnomaly: true, severity: 'HIGH', threshold: THRESHOLDS.temperature.high };
+    // Rule-based
+    if (key === 'temperature') {
+      if (current > THRESHOLDS.temperature.critical_high || current < THRESHOLDS.temperature.critical_low) {
+        detected = true; severity = 'HIGH'; confidence = 95
+      } else if (current > THRESHOLDS.temperature.warn_high || current < THRESHOLDS.temperature.warn_low) {
+        detected = true; severity = 'MEDIUM'; confidence = 80
       }
-      if (value < THRESHOLDS.temperature.low) {
-        return { isAnomaly: true, severity: 'HIGH', threshold: THRESHOLDS.temperature.low };
-      }
-      break;
+    }
+    if (key === 'battery') {
+      if (current < THRESHOLDS.battery.critical_low) { detected = true; severity = 'HIGH'; confidence = 99; baseline = 50 }
+      else if (current < THRESHOLDS.battery.warn_low) { detected = true; severity = 'MEDIUM'; confidence = 85; baseline = 50 }
+    }
+    if (key === 'signal' && current < THRESHOLDS.signal.critical) {
+      detected = true; severity = 'MEDIUM'; confidence = 75; baseline = -95
+    }
 
-    case 'battery':
-      if (value < THRESHOLDS.battery.low) {
-        return { isAnomaly: true, severity: 'HIGH', threshold: THRESHOLDS.battery.low };
-      }
-      break;
-
-    case 'signal':
-      if (value < THRESHOLDS.signal.low && value !== null) {
-        return { isAnomaly: true, severity: 'MEDIUM', threshold: THRESHOLDS.signal.low };
-      }
-      break;
-
-    case 'altitude':
-      if (previousValue !== undefined) {
-        const drift = Math.abs(value - previousValue);
-        if (drift > THRESHOLDS.altitudeDrift) {
-          return { isAnomaly: true, severity: 'MEDIUM', threshold: THRESHOLDS.altitudeDrift };
+    // Statistical fallback
+    if (!detected) {
+      const hist = getHistory()
+      if (hist.length >= 8) {
+        const avg = mean(hist)
+        const sd = std(hist, avg)
+        baseline = Math.round(avg * 100) / 100
+        if (sd > 0) {
+          const z = Math.abs(current - avg) / sd
+          if (z > 2.5) {
+            detected = true
+            method = 'statistical'
+            confidence = Math.min(100, Math.round((z / 2.5) * 100))
+            severity = z > 4 ? 'HIGH' : z > 3 ? 'MEDIUM' : 'LOW'
+          }
         }
       }
-      break;
-
-    case 'velocity':
-      if (previousValue !== undefined) {
-        const deviation = Math.abs(value - previousValue);
-        if (deviation > THRESHOLDS.velocityDeviation) {
-          return { isAnomaly: true, severity: 'LOW', threshold: THRESHOLDS.velocityDeviation };
-        }
-      }
-      break;
-  }
-
-  return { isAnomaly: false, severity: 'LOW', threshold: 0 };
-}
-
-export function analyzeTelemetryForAnomalies(
-  satelliteName: string,
-  currentSnapshot: TelemetrySnapshot,
-  history: TelemetrySnapshot[]
-): AnomalyAlert[] {
-  const alerts: AnomalyAlert[] = [];
-  const now = new Date();
-
-  const altitudeHistory = history.map(h => h.altitude);
-  const velocityHistory = history.map(h => h.velocity);
-  const tempHistory = history.map(h => h.temperature);
-  const batteryHistory = history.map(h => h.battery);
-  const signalHistory = history.map(h => h.signalStrength ?? -80);
-
-  const { isAnomaly: altAnomaly, confidence: altConf, baseline: altBaseline } = detectStatisticalAnomaly(
-    currentSnapshot.altitude, altitudeHistory
-  );
-
-  if (altAnomaly) {
-    alerts.push({
-      id: `alt-${satelliteName}-${now.getTime()}`,
-      satelliteName,
-      metric: 'Altitude',
-      currentValue: currentSnapshot.altitude,
-      baselineValue: altBaseline,
-      threshold: altBaseline + 2.5 * calculateStatistics(altitudeHistory).std,
-      severity: altConf > 80 ? 'HIGH' : altConf > 60 ? 'MEDIUM' : 'LOW',
-      confidence: altConf,
-      detectionMethod: 'statistical',
-      timestamp: now,
-      narration: '',
-      narrationLoading: true,
-      acknowledged: false
-    });
-  }
-
-  const { isAnomaly: velAnomaly, confidence: velConf, baseline: velBaseline } = detectStatisticalAnomaly(
-    currentSnapshot.velocity, velocityHistory
-  );
-
-  if (velAnomaly) {
-    alerts.push({
-      id: `vel-${satelliteName}-${now.getTime()}`,
-      satelliteName,
-      metric: 'Velocity',
-      currentValue: currentSnapshot.velocity,
-      baselineValue: velBaseline,
-      threshold: velBaseline + 2.5 * calculateStatistics(velocityHistory).std,
-      severity: velConf > 80 ? 'HIGH' : velConf > 60 ? 'MEDIUM' : 'LOW',
-      confidence: velConf,
-      detectionMethod: 'statistical',
-      timestamp: now,
-      narration: '',
-      narrationLoading: true,
-      acknowledged: false
-    });
-  }
-
-  const { isAnomaly: tempAnomaly, confidence: tempConf, baseline: tempBaseline } = detectStatisticalAnomaly(
-    currentSnapshot.temperature, tempHistory
-  );
-
-  if (tempAnomaly) {
-    alerts.push({
-      id: `temp-${satelliteName}-${now.getTime()}`,
-      satelliteName,
-      metric: 'Temperature',
-      currentValue: currentSnapshot.temperature,
-      baselineValue: tempBaseline,
-      threshold: tempBaseline + 2.5 * calculateStatistics(tempHistory).std,
-      severity: tempConf > 80 ? 'HIGH' : tempConf > 60 ? 'MEDIUM' : 'LOW',
-      confidence: tempConf,
-      detectionMethod: 'statistical',
-      timestamp: now,
-      narration: '',
-      narrationLoading: true,
-      acknowledged: false
-    });
-  }
-
-  const thresholdTemp = detectThresholdAnomaly('temperature', currentSnapshot.temperature, currentSnapshot.temperature);
-  if (thresholdTemp.isAnomaly && !tempAnomaly) {
-    alerts.push({
-      id: `temp-thresh-${satelliteName}-${now.getTime()}`,
-      satelliteName,
-      metric: 'Temperature',
-      currentValue: currentSnapshot.temperature,
-      baselineValue: tempHistory[tempHistory.length - 1] ?? currentSnapshot.temperature,
-      threshold: thresholdTemp.threshold,
-      severity: thresholdTemp.severity,
-      confidence: 100,
-      detectionMethod: 'threshold',
-      timestamp: now,
-      narration: '',
-      narrationLoading: true,
-      acknowledged: false
-    });
-  }
-
-  const thresholdBattery = detectThresholdAnomaly('battery', currentSnapshot.battery, currentSnapshot.battery);
-  if (thresholdBattery.isAnomaly) {
-    const existingBatteryAlert = alerts.find(a => a.metric === 'Battery');
-    if (!existingBatteryAlert) {
-      alerts.push({
-        id: `batt-thresh-${satelliteName}-${now.getTime()}`,
-        satelliteName,
-        metric: 'Battery',
-        currentValue: currentSnapshot.battery,
-        baselineValue: batteryHistory[batteryHistory.length - 1] ?? 80,
-        threshold: thresholdBattery.threshold,
-        severity: thresholdBattery.severity,
-        confidence: 100,
-        detectionMethod: 'threshold',
-        timestamp: now,
-        narration: '',
-        narrationLoading: true,
-        acknowledged: false
-      });
     }
+
+    if (!detected) return
+    console.log(`[SATGUARD ANOMALY] ${sat.name} | ${label} | current: ${current} | baseline: ${baseline} | ${severity} | ${confidence}%`)
+    seen.add(id)
+    results.push({
+      id, satelliteName: sat.name, noradId: sat.noradId,
+      metric: label, currentValue: current, baselineValue: baseline,
+      severity, confidence, detectionMethod: method, timestamp: new Date(),
+    })
   }
 
-  if (currentSnapshot.signalStrength !== null) {
-    const thresholdSignal = detectThresholdAnomaly('signal', currentSnapshot.signalStrength, currentSnapshot.signalStrength);
-    if (thresholdSignal.isAnomaly) {
-      alerts.push({
-        id: `sig-thresh-${satelliteName}-${now.getTime()}`,
-        satelliteName,
-        metric: 'Signal Strength',
-        currentValue: currentSnapshot.signalStrength,
-        baselineValue: signalHistory[signalHistory.length - 1] ?? -80,
-        threshold: thresholdSignal.threshold,
-        severity: thresholdSignal.severity,
-        confidence: 100,
-        detectionMethod: 'threshold',
-        timestamp: now,
-        narration: '',
-        narrationLoading: true,
-        acknowledged: false
-      });
-    }
-  }
+  check('temperature', 'Temperature', sat.temperature, () => sat.history.map(h => h.temperature))
+  check('battery', 'Battery', sat.battery, () => sat.history.map(h => h.battery))
+  check('signal', 'Signal Strength', sat.signalStrength, () => sat.history.map(h => h.signalStrength ?? -95))
+  check('altitude', 'Altitude', sat.altitude, () => sat.history.map(h => h.altitude))
+  check('velocity', 'Velocity', sat.velocity, () => sat.history.map(h => h.velocity))
 
-  return alerts;
-}
-
-export function determineSatelliteStatus(alerts: AnomalyAlert[]): 'nominal' | 'warning' | 'critical' {
-  const hasHigh = alerts.some(a => a.severity === 'HIGH' && !a.acknowledged);
-  const hasMedium = alerts.some(a => a.severity === 'MEDIUM' && !a.acknowledged);
-
-  if (hasHigh) return 'critical';
-  if (hasMedium) return 'warning';
-  return 'nominal';
+  return results
 }
