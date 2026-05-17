@@ -71,15 +71,3 @@ export const THRESHOLDS = {
   battery: { critical_low: 10, warn_low: 20 },
   signal: { warn: -110, critical: -118 },
 }
-
-export interface SpaceWeather {
-  kpIndex: number
-  kpHistory: { time: string; kp: number }[]
-  solarWindBz: number
-  solarWindSpeed: number
-  xrayFlux: number
-  flareClass: string
-  riskLevel: string
-  timestamp: string
-  source: string
-}
